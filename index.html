@@ -240,6 +240,15 @@
     <h3>Settings<span class="x" id="setClose">×</span></h3>
 
     <div class="sec">
+      <div class="lab">Play mode</div>
+      <div class="pillrow" id="modeSeg">
+        <button data-p="both" aria-pressed="true">Both hands</button>
+        <button data-p="chords" aria-pressed="false">Chords only</button>
+        <button data-p="melody" aria-pressed="false">Melody only</button>
+      </div>
+    </div>
+
+    <div class="sec" id="inputSec">
       <div class="lab">Left-hand input</div>
       <div class="pillrow" id="inputSeg">
         <button data-m="joystick" aria-pressed="true">Joystick</button>
@@ -351,7 +360,7 @@ const chordName=(pc,q)=>NOTE_NAMES[((pc%12)+12)%12]+QUALITIES[q].label;
 /* ===== State ===== */
 const state={
   keyPc:0, scale:"major", wave:"sine", octaves:3, baseMidi:60, snap:true,
-  notes:[], wheel:[],
+  notes:[], wheel:[], playMode:"both",
   inputMethod:"joystick", anchorMode:"recenter", deadzone:0.06, hysteresis:0.15,
   bpm:100, metro:false,
   delayOn:true, delayDiv:0.5, delayMix:0.18, delayFb:0.28,
@@ -586,8 +595,15 @@ function onResults(res){
   elHands.textContent=hands.length;
   let left=null,right=null;
   const tg=hands.map(lm=>({lm,sx:1-lm[0].x}));
-  if(tg.length===1) right=tg[0];
-  else if(tg.length>=2){tg.sort((a,b)=>a.sx-b.sx);left=tg[0];right=tg[tg.length-1];}
+  tg.sort((a,b)=>a.sx-b.sx);
+  if(state.playMode==="chords"){
+    if(tg.length) left=tg[0];                 // any hand controls chords
+  } else if(state.playMode==="melody"){
+    if(tg.length) right=tg[tg.length-1];      // any hand controls melody
+  } else {                                    // both
+    if(tg.length===1) right=tg[0];
+    else if(tg.length>=2){left=tg[0];right=tg[tg.length-1];}
+  }
 
   for(const t of tg) drawHand(t.lm,t===left?"left":"right");
 
@@ -687,6 +703,19 @@ const snapTog=$("#snapTog");function tSnap(){state.snap=!state.snap;snapTog.setA
 
 $("#settingsBtn").onclick=()=>$("#settings").classList.toggle("open");
 $("#setClose").onclick=()=>$("#settings").classList.remove("open");
+
+function setPlayMode(p){
+  state.playMode=p;
+  document.querySelectorAll("#modeSeg button").forEach(x=>x.setAttribute("aria-pressed",x.dataset.p===p));
+  // left-hand input controls only matter when chords are in play
+  $("#inputSec").style.opacity=(p==="melody")?0.4:1;
+  $("#inputSec").style.pointerEvents=(p==="melody")?"none":"auto";
+  // reset voices/gates so nothing hangs when switching
+  melodyOff();chordOff();rPinch=false;lPinch=false;anchor=null;hadLeft=false;
+  roMel.dataset.hot="0";roChord.dataset.hot="0";clearLadder();
+  $("#hint").classList.add("show");setTimeout(()=>$("#hint").classList.remove("show"),3500);
+}
+document.querySelectorAll("#modeSeg button").forEach(b=>b.onclick=()=>setPlayMode(b.dataset.p));
 
 function setInput(m){
   state.inputMethod=m;
